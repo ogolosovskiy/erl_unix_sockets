@@ -1,0 +1,12 @@
+{application, pipe,
+ [
+  {description, "Named pipe driver for erlang"},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { pipe_app, []}},
+  {env, []}
+ ]}.
