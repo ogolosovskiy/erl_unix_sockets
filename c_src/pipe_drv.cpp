@@ -106,6 +106,32 @@ void send(std::string const& data, int socket_handle)
       throw pdexception("send", strerror(errno));
 }
 
+std::string recv(int socket_handle)
+{
+  int rc = 0;
+  int bytesReceived = 0;
+  int const BUFFER_LENGTH = 1024;
+  char buffer[BUFFER_LENGTH];
+  memset(buffer, 0, BUFFER_LENGTH);
+
+  while (bytesReceived < BUFFER_LENGTH)
+    {
+      rc = recv(socket_handle, &buffer[bytesReceived], BUFFER_LENGTH - bytesReceived, 0);
+      //     fprintf(stderr, "Data:%d:%s", rc, buffer);
+
+      if (rc < 0)
+        throw pdexception("send", strerror(errno));
+
+      if (rc == 0)
+          break;
+
+      bytesReceived += rc;
+    }
+
+  return std::string(buffer);
+}
+
+
 typedef struct pipedrv pipedrv_t;
 
 static ErlDrvEntry pipedrv_driver_entry;
@@ -188,8 +214,19 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
                     close_pipe(d->socket_handle);
                     ei_x_encode_atom(&result, "ok");
                   }
-                else 
-                  throw pdexception("badarg","PortDriver: bad arg, unexpected operation");
+                else
+                  if (!strcmp("recv", operation)) 
+                    {
+                      std::string res = recv(d->socket_handle);
+
+                      fprintf(stderr, "Data:%s\n", res.c_str());
+
+                      ei_x_encode_tuple_header(&result, 2);
+                      ei_x_encode_atom(&result, "ok");
+                      ei_x_encode_string(&result, res.c_str());
+                    }
+                  else 
+                    throw pdexception("badarg","PortDriver: bad arg, unexpected operation");
 
           }
         catch(pdexception const& ex)

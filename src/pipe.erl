@@ -136,10 +136,11 @@ handle_call({close}, _From, #state{port = Port} = State) ->
 handle_call({recv}, _From, #state{port = Port} = State) ->
 	port_command(State#state.port, erlang:term_to_binary({recv})),
 	Reply = receive	{Port, {data, Bin}} ->
-                        io:format("Recv: ~p", [{data,Bin}]),
+%%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
                 after 1000 -> {error, timeout}
                 end,
+%%        io:format("Recv: ~p", [Reply]),
 	{reply, Reply, State};
 
 
