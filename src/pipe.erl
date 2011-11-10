@@ -10,7 +10,7 @@
 	start/0,
 	start_link/0,
         open/2, %% debug
-        socket/1, 
+        connect/1, 
         close/0,
         send/1,
         recv/0
@@ -39,9 +39,9 @@ start_link() ->
 %% strcpy(serveraddr.sun_path, SERVER_PATH);
 %% rc = connect(sd, (struct sockaddr *)&serveraddr, SUN_LEN(&serveraddr));
 %% ServerAddr is file path: example: /var/run/rtpserver.sock
--spec socket(string()) -> ok | {error, any()}.
-socket(ServerAddr) -> 
-	gen_server:call(?MODULE, {socket, ServerAddr}).
+-spec connect(string()) -> ok | {error, any()}.
+connect(ServerAddr) -> 
+	gen_server:call(?MODULE, {connect, ServerAddr}).
     
 %% rc = send(sd, buffer, sizeof(buffer), 0);
 -spec send(string()) -> ok | {error, any()}.
@@ -98,27 +98,28 @@ init([]) ->
 handle_call({open, StrArg, IntArg}, _From, #state{port = Port} = State) ->
 	port_command(State#state.port, erlang:term_to_binary({open, StrArg, IntArg})),
 	Reply = receive	{Port, {data, Bin}} ->
-                        io:format("Recv: ~p", [{data,Bin}]),
+%%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
                 after 1000 -> {error, timeout}
                 end,
 	{reply, Reply, State};
 
-handle_call({socket, ServerAddr}, _From, #state{port = Port} = State) ->
-	port_command(State#state.port, erlang:term_to_binary({open, ServerAddr})),
+handle_call({connect, ServerAddr}, _From, #state{port = Port} = State) ->
+%%        io:format("Socket: ~p", [ServerAddr]),
+	port_command(State#state.port, erlang:term_to_binary({connect, ServerAddr})),
 	Reply = receive	{Port, {data, Bin}} ->
-                        io:format("Recv: ~p", [{data,Bin}]),
+%%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
-                after 1000 -> timeout
+                after 1000 -> {error, timeout}
                 end,
 	{reply, Reply, State};
 
 handle_call({send, Data}, _From, #state{port = Port} = State) ->
 	port_command(State#state.port, erlang:term_to_binary({send, Data})),
 	Reply = receive	{Port, {data, Bin}} ->
-                        io:format("Recv: ~p", [{data,Bin}]),
+%%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
-                after 1000 -> timeout
+                after 1000 -> {error, timeout}
                 end,
 	{reply, Reply, State};
 
@@ -126,9 +127,9 @@ handle_call({send, Data}, _From, #state{port = Port} = State) ->
 handle_call({close}, _From, #state{port = Port} = State) ->
 	port_command(State#state.port, erlang:term_to_binary({close})),
 	Reply = receive	{Port, {data, Bin}} ->
-                        io:format("Recv: ~p", [{data,Bin}]),
+%%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
-                after 1000 -> timeout
+                after 1000 -> {error, timeout}
                 end,
 	{reply, Reply, State};
 
@@ -137,7 +138,7 @@ handle_call({recv}, _From, #state{port = Port} = State) ->
 	Reply = receive	{Port, {data, Bin}} ->
                         io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
-                after 1000 -> timeout
+                after 1000 -> {error, timeout}
                 end,
 	{reply, Reply, State};
 
