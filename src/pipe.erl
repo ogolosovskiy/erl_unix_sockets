@@ -171,7 +171,7 @@ load_path(File) ->
 		[Dir|_] ->
 			{ok, Dir};
 		[] ->
-			error_logger:format("Error: ~s not found in code path\n", [File]),
+			error_logger:format("Error: ~s not found in code path", [File]),
 			{error, enoent}
 	        end.
 

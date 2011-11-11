@@ -74,6 +74,7 @@ std::string get_string(char* input_buf, int* index)
 
 void close_pipe(int& socket_handle)
 {
+  fprintf(stderr, "Close socket: %d \n", socket_handle);
   ::close(socket_handle);
   socket_handle = 0;
 }
@@ -101,9 +102,13 @@ void create_and_connect(std::string const& path, int& socket_handle)
 
 void send(std::string const& data, int socket_handle)
 {
+  fprintf(stderr, "Send: %s to %d\n", data.c_str(), socket_handle );
   int rc = send(socket_handle, data.c_str(), data.size(), 0);
   if (rc < 0)
+    {
+      fprintf(stderr, "Exception: %s ", strerror(errno) );
       throw pdexception("send", strerror(errno));
+    }
 }
 
 std::string recv(int socket_handle)
@@ -138,7 +143,7 @@ static ErlDrvEntry pipedrv_driver_entry;
 
 static void encode_error_ex(ei_x_buff* buff, char const* error_atom, char const* error_desc_string) 
 {
-        fprintf(stderr,"/n Ex Error: /n%s:%s/n", error_atom, error_desc_string);
+        fprintf(stderr,"\n Ex Error: \n%s:%s\n", error_atom, error_desc_string);
 	ei_x_encode_tuple_header(buff, 3);
 	ei_x_encode_atom(buff, "error");
 	ei_x_encode_atom(buff, error_atom);
@@ -219,7 +224,7 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
                     {
                       std::string res = recv(d->socket_handle);
 
-                      fprintf(stderr, "Data:%s\n", res.c_str());
+                      //                      fprintf(stderr, "Data:%s\n", res.c_str());
 
                       ei_x_encode_tuple_header(&result, 2);
                       ei_x_encode_atom(&result, "ok");
