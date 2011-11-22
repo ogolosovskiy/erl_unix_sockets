@@ -10,10 +10,13 @@
 	start/0,
 	start_link/0,
         open/2, %% debug
-        connect/1, 
-        close/0,
-        send/1,
-        recv/0
+        connect/2, 
+        bind/2,
+        close/1,
+        send/2,
+        recv/1,
+        socket/0,
+        test/0
 ]).
 
 % gen_server callbacks
@@ -34,36 +37,102 @@ start() ->
 start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% sd = socket(AF_UNIX, SOCK_STREAM, 0);
-%% serveraddr.sun_family = AF_UNIX;
+
+%% Open socket   return socket(AF_UNIX, SOCK_STREAM, 0);
+%% Return string represent handle of socket
+-spec socket() -> {ok, integer()} | {error, any()}.
+socket() ->
+	gen_server:call(?MODULE, {socket}).
+
 %% strcpy(serveraddr.sun_path, SERVER_PATH);
 %% rc = connect(sd, (struct sockaddr *)&serveraddr, SUN_LEN(&serveraddr));
 %% ServerAddr is file path: example: /var/run/rtpserver.sock
--spec connect(string()) -> ok | {error, any()}.
-connect(ServerAddr) -> 
-	gen_server:call(?MODULE, {connect, ServerAddr}).
+-spec connect(string(), integer()) -> ok | {error, any()}.
+connect(ServerAddr, SocketHandle) -> 
+	gen_server:call(?MODULE, {connect, ServerAddr, SocketHandle}).
+
+
+-spec bind(string(), integer()) -> ok | {error, any()}.
+bind(LocalAddr, SocketHandle) -> 
+	gen_server:call(?MODULE, {bind, LocalAddr, SocketHandle}).
+
     
 %% rc = send(sd, buffer, sizeof(buffer), 0);
--spec send(string()) -> ok | {error, any()}.
-send(Data) -> 
-	gen_server:call(?MODULE, {send, Data}).
+-spec send(string(), integer()) -> ok | {error, any()}.
+send(Data, SocketHandle) -> 
+	gen_server:call(?MODULE, {send, Data, SocketHandle}).
 
 %%  close(sd);
--spec close() -> ok | {error, any()}.
-close() -> 
-	gen_server:call(?MODULE, {close}).
+-spec close(integer()) -> ok | {error, any()}.
+close(Handle) -> 
+	gen_server:call(?MODULE, {close, Handle}).
 
 %%  recv(sd, &buffer);
--spec recv() -> {ok, string()} | {error, any()}.
-recv() -> 
-	gen_server:call(?MODULE, {recv}).
+-spec recv(integer()) -> {ok, string()} | {error, any()}.
+recv(SocketHandle) -> 
+	gen_server:call(?MODULE, {recv, SocketHandle}).
 
 %% Debug
 open(StrArg,IntArg) ->
 	gen_server:call(?MODULE, {open, StrArg, IntArg}).
 
 
-%%% API %%%
+
+test() ->
+    io:format("Load driver ~n ",[]),
+    {ok, _} = start(),
+
+    io:format("Open STREAM SOCKET ~n ",[]),
+    {ok, Handle} = socket(),
+    io:format("Opened socket ~p ~n ",[Handle]),
+
+    %% LocalAddr = "/var/tmp/unixsocketclient.sock",
+    %% io:format("Binding to ~p ~n ",[LocalAddr]),
+    %% ok = bind(LocalAddr, Handle),
+    %% io:format("Binded to ~p ~p ~n ",[LocalAddr, Handle]),
+
+    Addr = "/var/run/unison/srtpproxy.sock",
+    io:format("Connecting to ~p ~n ",[Addr]),
+    ok = connect(Addr, Handle),
+    io:format("Connected to ~p ~p ~n ",[Addr, Handle]),
+
+    Data = "U 14@u1_3a96caa1 192.168.1.101 38002 773814127015",
+    io:format("Sending ~p ~n ",[Data]),
+    ok = send(Data, Handle),
+    io:format("Sended ~n "),
+ 
+    io:format("Receiving ~n "),
+    {ok, Res} = recv(Handle),
+    io:format("Received ~p ~n ", [Res]),
+
+    io:format("Closing socket ~p ~n ",[Handle]),
+    ok = close(Handle),
+    io:format("Closed socket ~p ~n ",[Handle]),
+    
+
+
+    io:format("Open STREAM SOCKET ~n ",[]),
+    {ok, Handle1} = socket(),
+    io:format("Opened socket ~p ~n ",[Handle1]),
+
+    io:format("Connecting to ~p ~n ",[Addr]),
+    ok = connect(Addr, Handle1),
+    io:format("Connected to ~p ~p ~n ",[Addr, Handle1]),
+
+    Data1 = "U 14@u1_3a96caa1 192.168.2.101 38004 773814127015",
+    io:format("Sending ~p ~n ",[Data1]),
+    ok = send(Data1, Handle1),
+    io:format("Sended ~n "),
+ 
+    io:format("Receiving ~n "),
+    {ok, Res1} = recv(Handle1),
+    io:format("Received ~p ~n ", [Res1]),
+
+
+    io:format("Closing socket ~p ~n ",[Handle1]),
+    ok = close(Handle1),
+    io:format("Closed socket ~p ~n ",[Handle1]).
+
 
 init([]) ->
 	erl_ddll:start(),
@@ -104,18 +173,25 @@ handle_call({open, StrArg, IntArg}, _From, #state{port = Port} = State) ->
                 end,
 	{reply, Reply, State};
 
-handle_call({connect, ServerAddr}, _From, #state{port = Port} = State) ->
+handle_call({socket}, _From, #state{port = Port} = State) ->
+	port_command(State#state.port, erlang:term_to_binary({socket})),
+	Reply = receive	{Port, {data, Bin}} ->
+%%                        io:format("Recv: ~p", [{data,Bin}]),
+			binary_to_term(Bin)
+                after 1000 -> {error, timeout}
+                end,
+%%        io:format("Opened socket reply: ~p ~n", [Reply]),
+
+        case Reply of
+            {ok, Handle} -> 
+                {reply, {ok, Handle}, State};
+            {error, ErrorDesc} ->
+                {reply, {error, ErrorDesc}, State}
+            end;
+
+handle_call({connect, ServerAddr, SocketHandle}, _From, #state{port = Port} = State) ->
 %%        io:format("Socket: ~p", [ServerAddr]),
-	port_command(State#state.port, erlang:term_to_binary({connect, ServerAddr})),
-	Reply = receive	{Port, {data, Bin}} ->
-%%                        io:format("Recv: ~p", [{data,Bin}]),
-			binary_to_term(Bin)
-                after 1000 -> {error, timeout}
-                end,
-	{reply, Reply, State};
-
-handle_call({send, Data}, _From, #state{port = Port} = State) ->
-	port_command(State#state.port, erlang:term_to_binary({send, Data})),
+	port_command(State#state.port, erlang:term_to_binary({connect, ServerAddr, SocketHandle})),
 	Reply = receive	{Port, {data, Bin}} ->
 %%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
@@ -124,8 +200,9 @@ handle_call({send, Data}, _From, #state{port = Port} = State) ->
 	{reply, Reply, State};
 
 
-handle_call({close}, _From, #state{port = Port} = State) ->
-	port_command(State#state.port, erlang:term_to_binary({close})),
+handle_call({bind, LocalAddr, SocketHandle}, _From, #state{port = Port} = State) ->
+%%        io:format("Socket: ~p", [ServerAddr]),
+	port_command(State#state.port, erlang:term_to_binary({bind, LocalAddr, SocketHandle})),
 	Reply = receive	{Port, {data, Bin}} ->
 %%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
@@ -133,8 +210,28 @@ handle_call({close}, _From, #state{port = Port} = State) ->
                 end,
 	{reply, Reply, State};
 
-handle_call({recv}, _From, #state{port = Port} = State) ->
-	port_command(State#state.port, erlang:term_to_binary({recv})),
+
+handle_call({send, Data, SocketHandle}, _From, #state{port = Port} = State) ->
+	port_command(State#state.port, erlang:term_to_binary({send, Data, SocketHandle})),
+	Reply = receive	{Port, {data, Bin}} ->
+%%                        io:format("Recv: ~p", [{data,Bin}]),
+			binary_to_term(Bin)
+                after 1000 -> {error, timeout}
+                end,
+	{reply, Reply, State};
+
+
+handle_call({close, Handle}, _From, #state{port = Port} = State) ->
+	port_command(State#state.port, erlang:term_to_binary({close, Handle})),
+	Reply = receive	{Port, {data, Bin}} ->
+%%                        io:format("Recv: ~p", [{data,Bin}]),
+			binary_to_term(Bin)
+                after 1000 -> {error, timeout}
+                end,
+	{reply, Reply, State};
+
+handle_call({recv, SocketHandle}, _From, #state{port = Port} = State) ->
+	port_command(State#state.port, erlang:term_to_binary({recv, SocketHandle})),
 	Reply = receive	{Port, {data, Bin}} ->
 %%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)

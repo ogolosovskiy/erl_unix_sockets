@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <sys/stat.h>
+
 
 #include <ei.h>
 #include <erl_driver.h>
@@ -66,44 +68,91 @@ std::string get_string(char* input_buf, int* index)
   if (size >= out_buf_size)  
       throw pdexception("badarg", "too large string argument");
 
-  if (ei_decode_string(input_buf, index,out_buf)) 
+  if (ei_decode_string(input_buf, index, out_buf)) 
       throw pdexception("badarg", "cant read string argument");
 
   return std::string(out_buf);
 }
 
+
+long get_long(char* input_buf, int* index)
+{
+  int type = 0, size = 0;
+  long num = 0;
+
+  ei_get_type(input_buf, index, &type, &size); 
+  if (type != ERL_SMALL_INTEGER_EXT)  
+    { 
+      std::ostringstream oss;
+      oss << "PortDriver: bad arg, unexpected argument type " << (char)type << " expect " << ERL_SMALL_INTEGER_EXT; 
+      throw pdexception("badarg",oss.str());
+    } 
+
+  if (ei_decode_long(input_buf, index, &num)) 
+      throw pdexception("badarg", "cant read int argument");
+
+  //  fprintf(stderr, "Decoded: %d \n", num);
+  return num;
+}
+
+
+
 void close_pipe(int& socket_handle)
 {
-  fprintf(stderr, "Close socket: %d \n", socket_handle);
+  //  fprintf(stderr, "Close socket: %d \n", socket_handle);
   ::close(socket_handle);
   socket_handle = 0;
 }
 
-void create_and_connect(std::string const& path, int& socket_handle)
+
+int socket()
 {
 
-  struct sockaddr_un serveraddr;
-
-  //            fprintf(stderr, "Opening socket: %s \n", path);
   int sd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (sd <= 0)
     throw pdexception("socket", strerror(errno));
 
-  socket_handle = sd;
-  //            fprintf(stderr, "Socket oppened, desc: %d \n", sd );
+  fprintf(stderr, "Opened socket: %d \n", sd);
+
+  return sd;
+}
+
+
+void connect(std::string const& path, int socket_handle)
+{
+
+  struct sockaddr_un serveraddr;
   memset(&serveraddr, 0, sizeof(serveraddr));
   serveraddr.sun_family = AF_UNIX;
   strcpy(serveraddr.sun_path, path.c_str());
 
-  if(connect(sd, (struct sockaddr *)&serveraddr, SUN_LEN(&serveraddr))<0)
+  if(connect(socket_handle, (struct sockaddr *)&serveraddr, SUN_LEN(&serveraddr))<0)
       throw pdexception("connect", strerror(errno));
-  //            fprintf(stderr, "Socket connected\n");
+
 }
+
+void bind(std::string const& local_path, int socket_handle)
+{
+
+  struct sockaddr_un clientaddr;
+  memset(&clientaddr, 0, sizeof(clientaddr));
+  clientaddr.sun_family = AF_UNIX;
+  strcpy(clientaddr.sun_path, local_path.c_str());
+
+  unlink(clientaddr.sun_path);
+
+  if(bind(socket_handle, (struct sockaddr *)&clientaddr, SUN_LEN(&clientaddr))<0)
+      throw pdexception("bind", strerror(errno));
+
+  if(chmod(clientaddr.sun_path, S_IRWXU)<0)
+      throw pdexception("chmod", strerror(errno));
+}
+
 
 void send(std::string const& data, int socket_handle)
 {
   fprintf(stderr, "Send: %s to %d\n", data.c_str(), socket_handle );
-  int rc = send(socket_handle, data.c_str(), data.size(), 0);
+  int rc = write(socket_handle, data.c_str(), data.size());
   if (rc < 0)
     {
       fprintf(stderr, "Exception: %s ", strerror(errno) );
@@ -152,16 +201,13 @@ static void encode_error_ex(ei_x_buff* buff, char const* error_atom, char const*
 
 struct pipedrv {
   ErlDrvPort port;
-  int socket_handle;
 };
 
 extern "C" ErlDrvData pipedrv_start(ErlDrvPort port, char *buf)
 {
   //        fprintf(stderr, "Drivers start");
-
 	pipedrv_t* d = (pipedrv_t*)driver_alloc(sizeof(pipedrv_t));
 	d->port = port;
-        d->socket_handle = 0;
 	return (ErlDrvData)d;
 }
 
@@ -194,38 +240,60 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
               throw pdexception("badarg", "PortDriver: bad arg, expected tuple {Command, Arg1 ...}");
 
             // fprintf(stderr, "version: %d index: %d operation: %s ", version, index, operation);
-            if (!strcmp("connect", operation)) 
+            if (!strcmp("socket", operation)) 
               {
-                if (d->socket_handle != 0)
-                  throw pdexception("socket", "port already opened");
+                int socket_handle = socket();
+                ei_x_encode_tuple_header(&result, 2);
+                ei_x_encode_atom(&result, "ok");
+                ei_x_encode_long(&result, socket_handle); 
+              }
+            else 
+            if (!strcmp("bind", operation)) 
+              {
             
                 std::string path = get_string(buff, &index);
-                create_and_connect(path, d->socket_handle);
+                int handle = get_long(buff, &index);
+
+                if (handle == 0)
+                  throw pdexception("bind", "port is not opened");
+
+                bind(path, handle);
+                ei_x_encode_atom(&result, "ok");
+              }
+            else 
+            if (!strcmp("connect", operation)) 
+              {
+            
+                std::string path = get_string(buff, &index);
+                int handle = get_long(buff, &index);
+
+                if (handle == 0)
+                  throw pdexception("connect", "port is not opened");
+
+                connect(path, handle);
                 ei_x_encode_atom(&result, "ok");
               }
             else 
               if (!strcmp("send", operation)) 
                 {
-                  if (d->socket_handle == 0)
-                    throw pdexception("socket", "port closed");
-            
                   std::string data = get_string(buff, &index);
-                  send(data, d->socket_handle);
+                  int handle = get_long(buff, &index);
+                  send(data, handle);
                   ei_x_encode_atom(&result, "ok");
                 }
               else 
                 if (!strcmp("close", operation)) 
                   {
-                    close_pipe(d->socket_handle);
+                    int handle = get_long(buff, &index);
+                    close_pipe(handle);
                     ei_x_encode_atom(&result, "ok");
                   }
                 else
                   if (!strcmp("recv", operation)) 
                     {
-                      std::string res = recv(d->socket_handle);
-
+                      int handle = get_long(buff, &index);
+                      std::string res = recv(handle);
                       //                      fprintf(stderr, "Data:%s\n", res.c_str());
-
                       ei_x_encode_tuple_header(&result, 2);
                       ei_x_encode_atom(&result, "ok");
                       ei_x_encode_string(&result, res.c_str());
@@ -236,8 +304,8 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
           }
         catch(pdexception const& ex)
           {
-            close_pipe(d->socket_handle);
             encode_error_ex(&result, ex.atom.c_str(), ex.description.c_str());
+            //            close_pipe(d->socket_handle);
           }
 
 	driver_output(d->port, result.buff, result.index);
