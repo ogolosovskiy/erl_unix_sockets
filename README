@@ -1,0 +1,13 @@
+compiling
+
+./rebar compile
+
+result
+
+./ebin erlang beams
+./private C++ driver 
+
+
+using
+
+see pipe:test
