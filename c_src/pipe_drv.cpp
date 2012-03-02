@@ -162,27 +162,19 @@ void send(std::string const& data, int socket_handle)
 
 std::string recv(int socket_handle)
 {
+  fprintf(stderr, "Receiving: from %d\n", socket_handle );
+
   int rc = 0;
-  int bytesReceived = 0;
   int const BUFFER_LENGTH = 1024;
   char buffer[BUFFER_LENGTH];
   memset(buffer, 0, BUFFER_LENGTH);
 
-  while (bytesReceived < BUFFER_LENGTH)
-    {
-      rc = recv(socket_handle, &buffer[bytesReceived], BUFFER_LENGTH - bytesReceived, 0);
-      //     fprintf(stderr, "Data:%d:%s", rc, buffer);
+  rc = recv(socket_handle, &buffer[0], BUFFER_LENGTH, 0);
 
-      if (rc < 0)
-        throw pdexception("send", strerror(errno));
+  if (rc < 0)
+    throw pdexception("recv", strerror(errno));
 
-      if (rc == 0)
-          break;
-
-      bytesReceived += rc;
-    }
-
-  return std::string(buffer);
+  return std::string(buffer, rc);
 }
 
 
@@ -293,7 +285,6 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
                     {
                       int handle = get_long(buff, &index);
                       std::string res = recv(handle);
-                      //                      fprintf(stderr, "Data:%s\n", res.c_str());
                       ei_x_encode_tuple_header(&result, 2);
                       ei_x_encode_atom(&result, "ok");
                       ei_x_encode_string(&result, res.c_str());
@@ -305,8 +296,10 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
         catch(pdexception const& ex)
           {
             encode_error_ex(&result, ex.atom.c_str(), ex.description.c_str());
+            fprintf(stderr, "exception :%s\n", ex.description.c_str() );
             //            close_pipe(d->socket_handle);
           }
+
 
 	driver_output(d->port, result.buff, result.index);
 	ei_x_free(&result);

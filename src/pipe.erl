@@ -91,12 +91,12 @@ test() ->
     %% ok = bind(LocalAddr, Handle),
     %% io:format("Binded to ~p ~p ~n ",[LocalAddr, Handle]),
 
-    Addr = "/var/run/unison/srtpproxy.sock",
+    Addr = "../tests/tcp_socket",
     io:format("Connecting to ~p ~n ",[Addr]),
     ok = connect(Addr, Handle),
     io:format("Connected to ~p ~p ~n ",[Addr, Handle]),
 
-    Data = "U 14@u1_3a96caa1 192.168.1.101 38002 773814127015",
+    Data = "Data portion 1",
     io:format("Sending ~p ~n ",[Data]),
     ok = send(Data, Handle),
     io:format("Sended ~n "),
@@ -119,7 +119,7 @@ test() ->
     ok = connect(Addr, Handle1),
     io:format("Connected to ~p ~p ~n ",[Addr, Handle1]),
 
-    Data1 = "U 14@u1_3a96caa1 192.168.2.101 38004 773814127015",
+    Data1 = "Data portion 2",
     io:format("Sending ~p ~n ",[Data1]),
     ok = send(Data1, Handle1),
     io:format("Sended ~n "),
@@ -128,6 +128,14 @@ test() ->
     {ok, Res1} = recv(Handle1),
     io:format("Received ~p ~n ", [Res1]),
 
+    Data2 = "Data portion 3",
+    io:format("Sending ~p ~n ",[Data2]),
+    ok = send(Data2, Handle1),
+    io:format("Sended ~n "),
+ 
+    io:format("Receiving ~n "),
+    {ok, Res2} = recv(Handle1),
+    io:format("Received ~p ~n ", [Res2]),
 
     io:format("Closing socket ~p ~n ",[Handle1]),
     ok = close(Handle1),
@@ -167,7 +175,7 @@ init([]) ->
 handle_call({open, StrArg, IntArg}, _From, #state{port = Port} = State) ->
 	port_command(State#state.port, erlang:term_to_binary({open, StrArg, IntArg})),
 	Reply = receive	{Port, {data, Bin}} ->
-%%                        io:format("Recv: ~p", [{data,Bin}]),
+                        io:format("Recieved from driver: ~p", [{data,Bin}]),
 			binary_to_term(Bin)
                 after 1000 -> {error, timeout}
                 end,
