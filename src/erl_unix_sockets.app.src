@@ -1,4 +1,4 @@
-{application, pipe,
+{application, erl_unix_sockets,
  [
   {description, "Named pipe driver for erlang"},
   {vsn, "0.0.1"},

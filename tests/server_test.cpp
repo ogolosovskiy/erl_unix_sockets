@@ -11,7 +11,7 @@
 #include <sys/stat.h>
 
 
-#define NAME "tcp_socket"
+#define NAME "/var/run/unison/tcp_socket_test.sock"
 
 main()
 {
@@ -26,11 +26,13 @@ main()
   }
   server.sun_family = AF_UNIX;
   strcpy(server.sun_path, NAME);
+
+  printf("TCP Socket has name %s\n", server.sun_path);
+
   if (bind(tsock, (struct sockaddr *) &server, sizeof(struct sockaddr_un))) {
     perror("binding stream socket");
     exit(1);
   }
-  printf("TCP Socket has name %s\n", server.sun_path);
   listen(tsock, 5);
   for (;;) 
     {

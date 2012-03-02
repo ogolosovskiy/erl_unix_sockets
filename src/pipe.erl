@@ -91,7 +91,7 @@ test() ->
     %% ok = bind(LocalAddr, Handle),
     %% io:format("Binded to ~p ~p ~n ",[LocalAddr, Handle]),
 
-    Addr = "../tests/tcp_socket",
+    Addr = "/var/run/unison/tcp_socket_test.sock",
     io:format("Connecting to ~p ~n ",[Addr]),
     ok = connect(Addr, Handle),
     io:format("Connected to ~p ~p ~n ",[Addr, Handle]),
@@ -144,7 +144,7 @@ test() ->
 
 init([]) ->
 	erl_ddll:start(),
-	Path = case code:priv_dir(syslog) of
+	Path = case code:lib_dir(erl_unix_sockets,priv) of
 		{error, _} ->
 			case load_path(?DRV_NAME++".so") of
 				{error, _} ->
@@ -182,7 +182,10 @@ handle_call({open, StrArg, IntArg}, _From, #state{port = Port} = State) ->
 	{reply, Reply, State};
 
 handle_call({socket}, _From, #state{port = Port} = State) ->
-	port_command(State#state.port, erlang:term_to_binary({socket})),
+    %% int socket_type
+    %% 0 - SOCK_STREAM
+    %% 1 - SOCK_DGRAM
+	port_command(State#state.port, erlang:term_to_binary({socket, 0})),
 	Reply = receive	{Port, {data, Bin}} ->
 %%                        io:format("Recv: ~p", [{data,Bin}]),
 			binary_to_term(Bin)

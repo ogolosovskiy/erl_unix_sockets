@@ -104,8 +104,10 @@ void close_pipe(int& socket_handle)
   socket_handle = 0;
 }
 
-
-int socket()
+// int socket_type
+// 0 - SOCK_STREAM
+// 1 - SOCK_DGRAM
+int socket(int socket_type)
 {
 
   int sd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -234,7 +236,8 @@ extern "C" void pipedrv_output(ErlDrvData handle, char *buff, int bufflen)
             // fprintf(stderr, "version: %d index: %d operation: %s ", version, index, operation);
             if (!strcmp("socket", operation)) 
               {
-                int socket_handle = socket();
+                int type = get_long(buff, &index);
+                int socket_handle = socket(type);
                 ei_x_encode_tuple_header(&result, 2);
                 ei_x_encode_atom(&result, "ok");
                 ei_x_encode_long(&result, socket_handle); 

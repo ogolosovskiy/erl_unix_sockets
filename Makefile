@@ -3,9 +3,10 @@ ERL_CFLAGS ?= -I/usr/local/lib/erlang/lib/erl_interface-3.7.4/include -I/usr/loc
 DRV_LDFLAGS ?= -shared  -L/usr/local/lib/erlang/lib/erl_interface-3.7.4/lib -lerl_interface -lei
 
 all:
+	mkdir -p ./priv
 	g++ $(ERL_CFLAGS) -o ./c_src/pipe_drv.o  -c -fpic ./c_src/pipe_drv.cpp 
 	g++ ./c_src/pipe_drv.o -o ./priv/pipe_drv.so $(DRV_LDFLAGS)
 clean:
 	rm -f ./priv/*
 	rm -f ./c_src/*.o
-
+	rm -f ./ebin/*

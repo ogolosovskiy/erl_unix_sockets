@@ -2,7 +2,7 @@ CC      = g++
 CFLAGS  = -I/.
 LDFLAGS = 
 
-all: server_test clean
+all: clean server_test
 
 server_test: server_test.o
 	$(CC) -o $@ $^ $(LDFLAGS)
